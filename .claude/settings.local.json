@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(/Applications/XAMPP/xamppfiles/bin/php:*)",
-      "Bash(curl:*)"
-    ]
-  }
-}
