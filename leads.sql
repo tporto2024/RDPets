@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS `leads` (
   `empresa`        VARCHAR(200)  NOT NULL,
   `segmento`       VARCHAR(100)  DEFAULT NULL,
   `cidade`         VARCHAR(150)  DEFAULT NULL,
+  `estado`         VARCHAR(5)    DEFAULT NULL COMMENT 'UF do estado (ex: SP, RJ, MG)',
   `telefone`       VARCHAR(30)   DEFAULT NULL,
   `email`          VARCHAR(200)  DEFAULT NULL,
   `redes_sociais`  JSON          DEFAULT NULL COMMENT '{"instagram":"url","facebook":"url","tiktok":"url","youtube":"url","linkedin":"url"}',

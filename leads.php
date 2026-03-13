@@ -93,13 +93,14 @@ if (!in_array($tabAtiva, ['hotel','petshop'])) $tabAtiva = 'hotel';
 $tabCounts = $pdo->query("SELECT categoria, COUNT(*) AS cnt FROM leads GROUP BY categoria")->fetchAll(PDO::FETCH_KEY_PAIR);
 
 // ── Filtros ──────────────────────────────────────────────────────────────────
-$q = trim($_GET['q']??''); $fStatus = $_GET['status']??''; $fSegmento = trim($_GET['segmento']??'');
+$q = trim($_GET['q']??''); $fStatus = $_GET['status']??''; $fSegmento = trim($_GET['segmento']??''); $fEstado = trim($_GET['estado']??'');
 $curPage = max(1,(int)($_GET['p']??1)); $perPage = 25; $offset = ($curPage-1)*$perPage;
 
 $where = ['l.categoria = ?']; $params = [$tabAtiva];
 if ($q) { $where[] = '(l.empresa LIKE ? OR l.cidade LIKE ? OR l.observacoes LIKE ? OR l.telefone LIKE ? OR l.email LIKE ?)'; for($i=0;$i<5;$i++) $params[] = "%$q%"; }
 if ($fStatus && in_array($fStatus, ['novo','contatado','convertido','em_negociacao','descartado'])) { $where[] = 'l.status = ?'; $params[] = $fStatus; }
 if ($fSegmento) { $where[] = 'l.segmento = ?'; $params[] = $fSegmento; }
+if ($fEstado) { $where[] = 'l.estado = ?'; $params[] = $fEstado; }
 $whereSQL = 'WHERE '.implode(' AND ', $where);
 
 $stT = $pdo->prepare("SELECT COUNT(*) FROM leads l $whereSQL"); $stT->execute($params); $total = (int)$stT->fetchColumn(); $pages = max(1,(int)ceil($total/$perPage));
@@ -107,6 +108,7 @@ $stD = $pdo->prepare("SELECT l.*, c.nome AS cliente_nome FROM leads l LEFT JOIN 
 $stS = $pdo->prepare("SELECT status, COUNT(*) FROM leads WHERE categoria=? GROUP BY status"); $stS->execute([$tabAtiva]); $statsRaw = $stS->fetchAll(PDO::FETCH_KEY_PAIR);
 $stats = ['novo'=>(int)($statsRaw['novo']??0),'contatado'=>(int)($statsRaw['contatado']??0),'convertido'=>(int)($statsRaw['convertido']??0),'em_negociacao'=>(int)($statsRaw['em_negociacao']??0),'descartado'=>(int)($statsRaw['descartado']??0)];
 $stSeg = $pdo->prepare("SELECT DISTINCT segmento FROM leads WHERE segmento IS NOT NULL AND categoria=? ORDER BY segmento"); $stSeg->execute([$tabAtiva]); $segmentos = $stSeg->fetchAll(PDO::FETCH_COLUMN);
+$stEst = $pdo->prepare("SELECT DISTINCT estado FROM leads WHERE estado IS NOT NULL AND estado != '' AND categoria=? ORDER BY estado"); $stEst->execute([$tabAtiva]); $estados = $stEst->fetchAll(PDO::FETCH_COLUMN);
 
 $statusBadges = ['novo'=>'bg-blue-100 text-blue-700','contatado'=>'bg-yellow-100 text-yellow-700','convertido'=>'bg-green-100 text-green-700','em_negociacao'=>'bg-purple-100 text-purple-700','descartado'=>'bg-gray-100 text-gray-500'];
 $statusLabels = ['novo'=>'Novo','contatado'=>'Contatado','convertido'=>'Convertido','em_negociacao'=>'Em Negociação','descartado'=>'Descartado'];
@@ -135,8 +137,12 @@ $statusLabels = ['novo'=>'Novo','contatado'=>'Contatado','convertido'=>'Converti
             <option value="">Segmento</option>
             <?php foreach ($segmentos as $seg): ?><option value="<?= e($seg) ?>" <?= $fSegmento===$seg?'selected':'' ?>><?= e($seg) ?></option><?php endforeach; ?>
         </select>
+        <select name="estado" class="border border-gray-300 rounded px-1.5 py-1 text-[11px]">
+            <option value="">Estado</option>
+            <?php foreach ($estados as $est): ?><option value="<?= e($est) ?>" <?= $fEstado===$est?'selected':'' ?>><?= e($est) ?></option><?php endforeach; ?>
+        </select>
         <button type="submit" class="bg-blue-600 text-white px-2.5 py-1 rounded text-[11px] hover:bg-blue-700">Filtrar</button>
-        <?php if ($q||$fStatus||$fSegmento): ?><a href="leads.php?tab=<?= e($tabAtiva) ?>" class="text-gray-400 hover:text-gray-600 text-[11px]">✕</a><?php endif; ?>
+        <?php if ($q||$fStatus||$fSegmento||$fEstado): ?><a href="leads.php?tab=<?= e($tabAtiva) ?>" class="text-gray-400 hover:text-gray-600 text-[11px]">✕</a><?php endif; ?>
     </form>
     <div class="flex gap-1 text-[10px]">
         <?php foreach (['novo'=>['🆕','blue'],'contatado'=>['📞','yellow'],'convertido'=>['✅','green'],'em_negociacao'=>['🤝','purple'],'descartado'=>['❌','gray']] as $sk=>[$se,$sc]): ?>
