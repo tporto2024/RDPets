@@ -1,9 +1,11 @@
 <?php
+ob_start();
 $pageTitle   = 'Leads';
 $currentPage = 'leads';
-require_once __DIR__ . '/_nav.php';
 
-// ── Ações POST ──────────────────────────────────────────────────────────────
+// ── Ações POST (antes do _nav.php para permitir header redirects) ────────
+require_once __DIR__ . '/auth.php';
+requireLogin();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['_action'] ?? '';
@@ -68,6 +70,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         header("Location: leads.php?$qs"); exit;
     }
 }
+
+// ── Inclui layout (navbar/sidebar) apenas no GET ────────────────────────────
+require_once __DIR__ . '/_nav.php';
 
 logActivity('Leads', 'Visualizou lista de leads', $_GET['q'] ?? '');
 
