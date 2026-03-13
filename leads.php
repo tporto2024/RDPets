@@ -36,6 +36,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         header("Location: leads.php?$qs"); exit;
     }
 
+    // ── Reverter status (apenas master) ──────────────────────────────────────
+    if ($action === 'reverter_status' && isMaster()) {
+        $id = (int)($_POST['id'] ?? 0);
+        if ($id) {
+            $pdo->prepare('UPDATE leads SET status = ?, contatado_em = NULL, contatado_por = NULL, convertido_em = NULL, convertido_por = NULL, cliente_id = NULL WHERE id = ?')->execute(['novo', $id]);
+            logActivity('Leads', 'Reverteu status', "Lead #$id → novo (master)");
+        }
+        $qs = http_build_query(array_filter(['tab'=>$tab,'q'=>$_POST['_q']??'','status'=>$_POST['_fs']??'','segmento'=>$_POST['_fg']??'','p'=>$_POST['_p']??'']));
+        header("Location: leads.php?$qs"); exit;
+    }
+
     if ($action === 'converter') {
         $id = (int)($_POST['id'] ?? 0);
         if ($id) {
@@ -218,11 +229,35 @@ $statusLabels = ['novo'=>'Novo','contatado'=>'Contatado','convertido'=>'Converti
     <!-- Status -->
     <td class="px-1.5 py-0.5 text-center">
         <?php if ($isNeg): ?>
-        <div class="inline-flex flex-col items-center"><span class="px-1.5 py-px rounded-full font-semibold bg-purple-100 text-purple-700" style="font-size:10px">🤝 Neg.</span><?php if(!empty($l['convertido_por'])): ?><span class="text-gray-400" style="font-size:8px">por <?= e($l['convertido_por']) ?></span><?php endif; ?></div>
+        <div class="inline-flex flex-col items-center">
+            <div class="inline-flex items-center gap-0.5">
+                <span class="px-1.5 py-px rounded-full font-semibold bg-purple-100 text-purple-700" style="font-size:10px">🤝 Neg.</span>
+                <?php if (isMaster()): ?>
+                <form method="POST" class="inline" onsubmit="return confirm('Reverter para Novo?')"><input type="hidden" name="_action" value="reverter_status"><input type="hidden" name="id" value="<?= $l['id'] ?>"><input type="hidden" name="_tab" value="<?= e($tabAtiva) ?>"><input type="hidden" name="_q" value="<?= e($q) ?>"><input type="hidden" name="_fs" value="<?= e($fStatus) ?>"><input type="hidden" name="_fg" value="<?= e($fSegmento) ?>"><input type="hidden" name="_p" value="<?= $curPage ?>"><button type="submit" title="Reverter para Novo" class="text-gray-300 hover:text-red-500 transition" style="font-size:10px">↩</button></form>
+                <?php endif; ?>
+            </div>
+            <?php if(!empty($l['convertido_por'])): ?><span class="text-gray-400" style="font-size:8px">por <?= e($l['convertido_por']) ?></span><?php endif; ?>
+        </div>
         <?php elseif ($isCon): ?>
-        <div class="inline-flex flex-col items-center"><span class="px-1.5 py-px rounded-full font-semibold bg-green-100 text-green-700" style="font-size:10px">✅ Conv.</span><?php if(!empty($l['convertido_por'])): ?><span class="text-gray-400" style="font-size:8px">por <?= e($l['convertido_por']) ?></span><?php endif; ?></div>
+        <div class="inline-flex flex-col items-center">
+            <div class="inline-flex items-center gap-0.5">
+                <span class="px-1.5 py-px rounded-full font-semibold bg-green-100 text-green-700" style="font-size:10px">✅ Conv.</span>
+                <?php if (isMaster()): ?>
+                <form method="POST" class="inline" onsubmit="return confirm('Reverter para Novo?\nO cliente criado NÃO será excluído.')"><input type="hidden" name="_action" value="reverter_status"><input type="hidden" name="id" value="<?= $l['id'] ?>"><input type="hidden" name="_tab" value="<?= e($tabAtiva) ?>"><input type="hidden" name="_q" value="<?= e($q) ?>"><input type="hidden" name="_fs" value="<?= e($fStatus) ?>"><input type="hidden" name="_fg" value="<?= e($fSegmento) ?>"><input type="hidden" name="_p" value="<?= $curPage ?>"><button type="submit" title="Reverter para Novo" class="text-gray-300 hover:text-red-500 transition" style="font-size:10px">↩</button></form>
+                <?php endif; ?>
+            </div>
+            <?php if(!empty($l['convertido_por'])): ?><span class="text-gray-400" style="font-size:8px">por <?= e($l['convertido_por']) ?></span><?php endif; ?>
+        </div>
         <?php elseif ($isCtd): ?>
-        <div class="inline-flex flex-col items-center"><span class="px-1.5 py-px rounded-full font-semibold bg-yellow-100 text-yellow-700" style="font-size:10px">📞 Contatado</span><?php if(!empty($l['contatado_por'])): ?><span class="text-gray-400" style="font-size:8px">por <?= e($l['contatado_por']) ?></span><?php endif; ?></div>
+        <div class="inline-flex flex-col items-center">
+            <div class="inline-flex items-center gap-0.5">
+                <span class="px-1.5 py-px rounded-full font-semibold bg-yellow-100 text-yellow-700" style="font-size:10px">📞 Contatado</span>
+                <?php if (isMaster()): ?>
+                <form method="POST" class="inline" onsubmit="return confirm('Reverter para Novo?')"><input type="hidden" name="_action" value="reverter_status"><input type="hidden" name="id" value="<?= $l['id'] ?>"><input type="hidden" name="_tab" value="<?= e($tabAtiva) ?>"><input type="hidden" name="_q" value="<?= e($q) ?>"><input type="hidden" name="_fs" value="<?= e($fStatus) ?>"><input type="hidden" name="_fg" value="<?= e($fSegmento) ?>"><input type="hidden" name="_p" value="<?= $curPage ?>"><button type="submit" title="Reverter para Novo" class="text-gray-300 hover:text-red-500 transition" style="font-size:10px">↩</button></form>
+                <?php endif; ?>
+            </div>
+            <?php if(!empty($l['contatado_por'])): ?><span class="text-gray-400" style="font-size:8px">por <?= e($l['contatado_por']) ?></span><?php endif; ?>
+        </div>
         <?php else: ?>
         <form method="POST" class="inline-flex">
             <input type="hidden" name="_action" value="status"><input type="hidden" name="id" value="<?= $l['id'] ?>"><input type="hidden" name="_tab" value="<?= e($tabAtiva) ?>"><input type="hidden" name="_q" value="<?= e($q) ?>"><input type="hidden" name="_fs" value="<?= e($fStatus) ?>"><input type="hidden" name="_fg" value="<?= e($fSegmento) ?>"><input type="hidden" name="_p" value="<?= $curPage ?>">
