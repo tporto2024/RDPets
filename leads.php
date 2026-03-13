@@ -89,7 +89,7 @@ logActivity('Leads', 'Visualizou lista de leads', $_GET['q'] ?? '');
 
 // ── Aba ativa ────────────────────────────────────────────────────────────────
 $tabAtiva = $_GET['tab'] ?? 'hotel';
-if (!in_array($tabAtiva, ['hotel','petshop'])) $tabAtiva = 'hotel';
+if (!in_array($tabAtiva, ['hotel','petshop','veterinaria'])) $tabAtiva = 'hotel';
 $tabCounts = $pdo->query("SELECT categoria, COUNT(*) AS cnt FROM leads GROUP BY categoria")->fetchAll(PDO::FETCH_KEY_PAIR);
 
 // ── Filtros ──────────────────────────────────────────────────────────────────
@@ -121,6 +121,9 @@ $statusLabels = ['novo'=>'Novo','contatado'=>'Contatado','convertido'=>'Converti
     </a>
     <a href="leads.php?tab=petshop" class="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold border-b-2 transition <?= $tabAtiva==='petshop' ? 'border-orange-500 text-orange-700' : 'border-transparent text-gray-500 hover:text-gray-700' ?>">
         🛒 Petshops <span class="bg-orange-100 text-orange-700 rounded-full px-1.5 py-0.5 text-[10px] font-bold"><?= (int)($tabCounts['petshop']??0) ?></span>
+    </a>
+    <a href="leads.php?tab=veterinaria" class="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold border-b-2 transition <?= $tabAtiva==='veterinaria' ? 'border-emerald-500 text-emerald-700' : 'border-transparent text-gray-500 hover:text-gray-700' ?>">
+        🩺 Veterinárias <span class="bg-emerald-100 text-emerald-700 rounded-full px-1.5 py-0.5 text-[10px] font-bold"><?= (int)($tabCounts['veterinaria']??0) ?></span>
     </a>
 </div>
 
