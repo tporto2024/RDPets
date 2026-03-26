@@ -1,7 +1,7 @@
 # CRM SocialPets / RD Pets - Backup de Memoria
 
 > Documento de referencia para manutencao e desenvolvimento do sistema CRM.
-> Atualizado em: 2026-02-24 (sessao 2)
+> Atualizado em: 2026-03-13 (sessao 3)
 
 ---
 
@@ -69,6 +69,10 @@ crm/
 ├── email_resumo.php        # Envio de resumo por email
 ├── google_callback.php     # Callback OAuth Google
 ├── whatsapp.php            # Integracao WhatsApp Cloud API
+├── leads.php               # Gestao de leads (abas por categoria, filtros, conversao)
+├── leads.sql               # Schema da tabela leads + dados iniciais
+├── insert_canis_goiania.sql        # SQL com 109 leads de canis de Goiania-GO
+├── insert_adestradores_brasilia.sql # SQL com 95 leads de adestradores de Brasilia-DF
 ├── crm.sql                 # Schema completo do banco de dados
 ├── logo.png                # Logo do sistema
 └── CLAUDE.md               # Este arquivo
@@ -89,6 +93,7 @@ crm/
 | `tarefas` | Tarefas vinculadas a negociacoes (tipo, assunto, quando, status, prioridade) |
 | `tarefas_log` | Historico de alteracoes em tarefas |
 | `usuarios_log` | Log de atividades dos usuarios |
+| `leads` | Leads de prospecção (id, empresa, segmento, **categoria**, cidade, estado, telefone, email, redes_sociais JSON, website, observacoes, status, cliente_id, contatado_em/por, convertido_em/por) |
 
 ### Perfis de Usuario
 - **master** — Acesso total (gerencia usuarios, configuracoes)
@@ -192,6 +197,97 @@ crm/
 - Atalho Ctrl+K (Cmd+K) para focar / Esc para limpar
 - Botao X para limpar busca
 - Dados de busca armazenados em `data-search` no HTML (mb_strtolower)
+
+### 2026-03-13 — Sessao 3: Leads - Melhorias e Novos Dados
+
+#### Feature 9: Aumento de fontes na pagina de Leads
+- Todas as fontes da pagina `leads.php` foram aumentadas para melhor legibilidade
+- font-size: 9px→11px, 10px→12px, 11px→13px, 8px→10px
+- Tailwind: text-[10px]→text-xs, text-[11px]→text-[13px], text-xs→text-sm (tabs)
+- Padding: py-0.5→py-1, line-heights: 1.2→1.4, 1.3→1.5
+- Input de busca: w-32→w-44
+
+#### Feature 10: Filtro por Cidade nos Leads
+- Adicionado campo de busca por cidade com `<input>` + `<datalist>` (autocomplete)
+- Somente cidades de leads com `cliente_id IS NOT NULL` (convertidos) aparecem no datalist
+- Filtro usa `LIKE` para busca parcial
+- Hidden inputs `_fe` (estado) e `_fci` (cidade) em todos os formularios inline
+- Parametros `estado` e `cidade` incluidos em todas as URLs de paginacao e redirects POST
+
+#### Feature 11: Abas Canil e Adestradores
+- Adicionadas 2 novas abas na pagina de leads: 🐕 Canis (amber) e 🎓 Adestradores (violet)
+- Validacao de tab atualizada: `['hotel','petshop','veterinaria','canil','adestrador']`
+- Cada aba tem cor propria e badge de contagem
+
+#### Dados: 109 Canis de Goiania-GO
+- Fonte: Kennel Clube de Goias (kennelclubedegoias.com.br/criadores/)
+- Todos com: empresa, telefone, segmento "Criador", cidade "Goiania", estado "GO"
+- Observacoes incluem: proprietario, racas criadas, site/instagram quando disponivel
+- SQL: `insert_canis_goiania.sql`
+
+#### Dados: 95 Adestradores de Brasilia-DF
+- Fontes: GuiaTelefone, TeleListas, StarOfService, Cronoshare, sites individuais
+- ~40 adestradores reais com dados completos (telefone, endereco, site)
+- ~10 hoteis/creches com servico de adestramento
+- ~7 pet shops com adestramento (Cobasi, Petz)
+- ~38 leads por regiao administrativa do DF
+- SQL: `insert_adestradores_brasilia.sql`
+
+---
+
+## 6b. Modulo de Leads
+
+### Tabela `leads` - Schema
+```sql
+CREATE TABLE leads (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  empresa VARCHAR(200) NOT NULL,
+  segmento VARCHAR(100),
+  categoria VARCHAR(50) DEFAULT 'hotel',   -- hotel, petshop, veterinaria, canil, adestrador
+  cidade VARCHAR(150),
+  estado VARCHAR(5),                       -- UF (SP, RJ, GO, DF, etc.)
+  telefone VARCHAR(30),
+  email VARCHAR(200),
+  redes_sociais JSON,                      -- {"instagram":"url","facebook":"url",...}
+  website VARCHAR(500),
+  observacoes TEXT,
+  status ENUM('novo','contatado','convertido','em_negociacao','descartado') DEFAULT 'novo',
+  cliente_id INT DEFAULT NULL,             -- FK clientes (quando convertido)
+  convertido_em TIMESTAMP NULL,
+  convertido_por VARCHAR(120),
+  contatado_em TIMESTAMP NULL,
+  contatado_por VARCHAR(120),
+  criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+```
+
+### Categorias (abas) de Leads
+| Aba | Categoria | Cor | Emoji | Leads (atual) |
+|---|---|---|---|---|
+| Hotel | hotel | blue | 🏨 | 278 |
+| Petshops | petshop | orange | 🛒 | 260 |
+| Veterinárias | veterinaria | emerald | 🩺 | 270 |
+| Canis | canil | amber | 🐕 | 109 |
+| Adestradores | adestrador | violet | 🎓 | 95 |
+
+### Status de Leads
+| Status | Badge | Descricao |
+|---|---|---|
+| novo | azul | Lead recem importado |
+| contatado | amarelo | Contato realizado (registra quem e quando) |
+| convertido | verde | Convertido em cliente (cria registro em `clientes`) |
+| em_negociacao | roxo | Em processo de negociacao |
+| descartado | cinza | Lead descartado |
+
+### Funcionalidades da pagina leads.php
+- **Abas** por categoria com contadores
+- **Busca** por empresa, cidade, observacoes, telefone, email
+- **Filtros**: status, segmento, estado (select), cidade (input + datalist autocomplete)
+- **Acoes inline**: alterar status, converter em cliente, editar telefone/email, excluir
+- **Conversao**: cria cliente automaticamente com dados do lead (empresa, telefone, email, tipo_negocio, observacoes)
+- **Reversao de status** (somente master): volta lead para "novo"
+- **Paginacao**: 25 registros por pagina
 
 ---
 

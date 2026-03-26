@@ -60,6 +60,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['_action'] ?? '') === 'salv
             $negId = (int)$pdo->lastInsertId();
             $pdo->prepare('INSERT INTO negociacoes_log (negociacao_id,de_etapa,para_etapa,changed_by,changed_ip) VALUES (?,?,?,?,?)')
                 ->execute([$negId,null,$etapa,$u['nome'],getClientIP()]);
+
+            // Atualizar lead associado para "Em Negociação"
+            $pdo->prepare("UPDATE leads SET status = 'em_negociacao' WHERE cliente_id = ? AND status = 'convertido'")
+                ->execute([$cliId]);
+
             header("Location: negociacao_detalhe.php?id=$negId&criado=1");
             exit;
         }

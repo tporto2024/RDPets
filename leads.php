@@ -32,7 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             logActivity('Leads', 'Alterou status', "Lead #$id → $novo");
         }
-        $qs = http_build_query(array_filter(['tab'=>$tab,'q'=>$_POST['_q']??'','status'=>$_POST['_fs']??'','segmento'=>$_POST['_fg']??'','p'=>$_POST['_p']??'']));
+        $qs = http_build_query(array_filter(['tab'=>$tab,'q'=>$_POST['_q']??'','status'=>$_POST['_fs']??'','segmento'=>$_POST['_fg']??'','estado'=>$_POST['_fe']??'','cidade'=>$_POST['_fci']??'','p'=>$_POST['_p']??'']));
         header("Location: leads.php?$qs"); exit;
     }
 
@@ -43,7 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pdo->prepare('UPDATE leads SET status = ?, contatado_em = NULL, contatado_por = NULL, convertido_em = NULL, convertido_por = NULL, cliente_id = NULL WHERE id = ?')->execute(['novo', $id]);
             logActivity('Leads', 'Reverteu status', "Lead #$id → novo (master)");
         }
-        $qs = http_build_query(array_filter(['tab'=>$tab,'q'=>$_POST['_q']??'','status'=>$_POST['_fs']??'','segmento'=>$_POST['_fg']??'','p'=>$_POST['_p']??'']));
+        $qs = http_build_query(array_filter(['tab'=>$tab,'q'=>$_POST['_q']??'','status'=>$_POST['_fs']??'','segmento'=>$_POST['_fg']??'','estado'=>$_POST['_fe']??'','cidade'=>$_POST['_fci']??'','p'=>$_POST['_p']??'']));
         header("Location: leads.php?$qs"); exit;
     }
 
@@ -70,14 +70,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'salvar_telefone') {
         $id = (int)($_POST['id']??0); $tel = trim($_POST['telefone']??'');
         if ($id) { $pdo->prepare('UPDATE leads SET telefone=? WHERE id=?')->execute([$tel?:null,$id]); }
-        $qs = http_build_query(array_filter(['tab'=>$tab,'q'=>$_POST['_q']??'','status'=>$_POST['_fs']??'','segmento'=>$_POST['_fg']??'','p'=>$_POST['_p']??'']));
+        $qs = http_build_query(array_filter(['tab'=>$tab,'q'=>$_POST['_q']??'','status'=>$_POST['_fs']??'','segmento'=>$_POST['_fg']??'','estado'=>$_POST['_fe']??'','cidade'=>$_POST['_fci']??'','p'=>$_POST['_p']??'']));
         header("Location: leads.php?$qs"); exit;
     }
 
     if ($action === 'salvar_email') {
         $id = (int)($_POST['id']??0); $email = trim($_POST['email']??'');
         if ($id) { $pdo->prepare('UPDATE leads SET email=? WHERE id=?')->execute([$email?:null,$id]); }
-        $qs = http_build_query(array_filter(['tab'=>$tab,'q'=>$_POST['_q']??'','status'=>$_POST['_fs']??'','segmento'=>$_POST['_fg']??'','p'=>$_POST['_p']??'']));
+        $qs = http_build_query(array_filter(['tab'=>$tab,'q'=>$_POST['_q']??'','status'=>$_POST['_fs']??'','segmento'=>$_POST['_fg']??'','estado'=>$_POST['_fe']??'','cidade'=>$_POST['_fci']??'','p'=>$_POST['_p']??'']));
         header("Location: leads.php?$qs"); exit;
     }
 }
@@ -89,11 +89,11 @@ logActivity('Leads', 'Visualizou lista de leads', $_GET['q'] ?? '');
 
 // ── Aba ativa ────────────────────────────────────────────────────────────────
 $tabAtiva = $_GET['tab'] ?? 'hotel';
-if (!in_array($tabAtiva, ['hotel','petshop','veterinaria'])) $tabAtiva = 'hotel';
+if (!in_array($tabAtiva, ['hotel','petshop','veterinaria','canil','adestrador'])) $tabAtiva = 'hotel';
 $tabCounts = $pdo->query("SELECT categoria, COUNT(*) AS cnt FROM leads GROUP BY categoria")->fetchAll(PDO::FETCH_KEY_PAIR);
 
 // ── Filtros ──────────────────────────────────────────────────────────────────
-$q = trim($_GET['q']??''); $fStatus = $_GET['status']??''; $fSegmento = trim($_GET['segmento']??''); $fEstado = trim($_GET['estado']??'');
+$q = trim($_GET['q']??''); $fStatus = $_GET['status']??''; $fSegmento = trim($_GET['segmento']??''); $fEstado = trim($_GET['estado']??''); $fCidade = trim($_GET['cidade']??'');
 $curPage = max(1,(int)($_GET['p']??1)); $perPage = 25; $offset = ($curPage-1)*$perPage;
 
 $where = ['l.categoria = ?']; $params = [$tabAtiva];
@@ -101,6 +101,7 @@ if ($q) { $where[] = '(l.empresa LIKE ? OR l.cidade LIKE ? OR l.observacoes LIKE
 if ($fStatus && in_array($fStatus, ['novo','contatado','convertido','em_negociacao','descartado'])) { $where[] = 'l.status = ?'; $params[] = $fStatus; }
 if ($fSegmento) { $where[] = 'l.segmento = ?'; $params[] = $fSegmento; }
 if ($fEstado) { $where[] = 'l.estado = ?'; $params[] = $fEstado; }
+if ($fCidade) { $where[] = 'l.cidade LIKE ?'; $params[] = "%$fCidade%"; }
 $whereSQL = 'WHERE '.implode(' AND ', $where);
 
 $stT = $pdo->prepare("SELECT COUNT(*) FROM leads l $whereSQL"); $stT->execute($params); $total = (int)$stT->fetchColumn(); $pages = max(1,(int)ceil($total/$perPage));
@@ -109,6 +110,9 @@ $stS = $pdo->prepare("SELECT status, COUNT(*) FROM leads WHERE categoria=? GROUP
 $stats = ['novo'=>(int)($statsRaw['novo']??0),'contatado'=>(int)($statsRaw['contatado']??0),'convertido'=>(int)($statsRaw['convertido']??0),'em_negociacao'=>(int)($statsRaw['em_negociacao']??0),'descartado'=>(int)($statsRaw['descartado']??0)];
 $stSeg = $pdo->prepare("SELECT DISTINCT segmento FROM leads WHERE segmento IS NOT NULL AND categoria=? ORDER BY segmento"); $stSeg->execute([$tabAtiva]); $segmentos = $stSeg->fetchAll(PDO::FETCH_COLUMN);
 $stEst = $pdo->prepare("SELECT DISTINCT estado FROM leads WHERE estado IS NOT NULL AND estado != '' AND categoria=? ORDER BY estado"); $stEst->execute([$tabAtiva]); $estados = $stEst->fetchAll(PDO::FETCH_COLUMN);
+$cidWhere = ['l.categoria = ?', "l.cidade IS NOT NULL", "l.cidade != ''", 'l.cliente_id IS NOT NULL']; $cidParams = [$tabAtiva];
+if ($fEstado) { $cidWhere[] = 'l.estado = ?'; $cidParams[] = $fEstado; }
+$stCid = $pdo->prepare("SELECT DISTINCT l.cidade FROM leads l WHERE ".implode(' AND ', $cidWhere)." ORDER BY l.cidade"); $stCid->execute($cidParams); $cidades = $stCid->fetchAll(PDO::FETCH_COLUMN);
 
 $statusBadges = ['novo'=>'bg-blue-100 text-blue-700','contatado'=>'bg-yellow-100 text-yellow-700','convertido'=>'bg-green-100 text-green-700','em_negociacao'=>'bg-purple-100 text-purple-700','descartado'=>'bg-gray-100 text-gray-500'];
 $statusLabels = ['novo'=>'Novo','contatado'=>'Contatado','convertido'=>'Convertido','em_negociacao'=>'Em Negociação','descartado'=>'Descartado'];
@@ -116,14 +120,20 @@ $statusLabels = ['novo'=>'Novo','contatado'=>'Contatado','convertido'=>'Converti
 
 <!-- Abas -->
 <div class="flex border-b border-gray-200 mb-2">
-    <a href="leads.php?tab=hotel" class="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold border-b-2 transition <?= $tabAtiva==='hotel' ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-500 hover:text-gray-700' ?>">
-        🏨 Hotel <span class="bg-blue-100 text-blue-700 rounded-full px-1.5 py-0.5 text-[10px] font-bold"><?= (int)($tabCounts['hotel']??0) ?></span>
+    <a href="leads.php?tab=hotel" class="flex items-center gap-1 px-3 py-1.5 text-sm font-semibold border-b-2 transition <?= $tabAtiva==='hotel' ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-500 hover:text-gray-700' ?>">
+        🏨 Hotel <span class="bg-blue-100 text-blue-700 rounded-full px-1.5 py-1 text-xs font-bold"><?= (int)($tabCounts['hotel']??0) ?></span>
     </a>
-    <a href="leads.php?tab=petshop" class="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold border-b-2 transition <?= $tabAtiva==='petshop' ? 'border-orange-500 text-orange-700' : 'border-transparent text-gray-500 hover:text-gray-700' ?>">
-        🛒 Petshops <span class="bg-orange-100 text-orange-700 rounded-full px-1.5 py-0.5 text-[10px] font-bold"><?= (int)($tabCounts['petshop']??0) ?></span>
+    <a href="leads.php?tab=petshop" class="flex items-center gap-1 px-3 py-1.5 text-sm font-semibold border-b-2 transition <?= $tabAtiva==='petshop' ? 'border-orange-500 text-orange-700' : 'border-transparent text-gray-500 hover:text-gray-700' ?>">
+        🛒 Petshops <span class="bg-orange-100 text-orange-700 rounded-full px-1.5 py-1 text-xs font-bold"><?= (int)($tabCounts['petshop']??0) ?></span>
     </a>
-    <a href="leads.php?tab=veterinaria" class="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold border-b-2 transition <?= $tabAtiva==='veterinaria' ? 'border-emerald-500 text-emerald-700' : 'border-transparent text-gray-500 hover:text-gray-700' ?>">
-        🩺 Veterinárias <span class="bg-emerald-100 text-emerald-700 rounded-full px-1.5 py-0.5 text-[10px] font-bold"><?= (int)($tabCounts['veterinaria']??0) ?></span>
+    <a href="leads.php?tab=veterinaria" class="flex items-center gap-1 px-3 py-1.5 text-sm font-semibold border-b-2 transition <?= $tabAtiva==='veterinaria' ? 'border-emerald-500 text-emerald-700' : 'border-transparent text-gray-500 hover:text-gray-700' ?>">
+        🩺 Veterinárias <span class="bg-emerald-100 text-emerald-700 rounded-full px-1.5 py-1 text-xs font-bold"><?= (int)($tabCounts['veterinaria']??0) ?></span>
+    </a>
+    <a href="leads.php?tab=canil" class="flex items-center gap-1 px-3 py-1.5 text-sm font-semibold border-b-2 transition <?= $tabAtiva==='canil' ? 'border-amber-500 text-amber-700' : 'border-transparent text-gray-500 hover:text-gray-700' ?>">
+        🐕 Canis <span class="bg-amber-100 text-amber-700 rounded-full px-1.5 py-1 text-xs font-bold"><?= (int)($tabCounts['canil']??0) ?></span>
+    </a>
+    <a href="leads.php?tab=adestrador" class="flex items-center gap-1 px-3 py-1.5 text-sm font-semibold border-b-2 transition <?= $tabAtiva==='adestrador' ? 'border-violet-500 text-violet-700' : 'border-transparent text-gray-500 hover:text-gray-700' ?>">
+        🎓 Adestradores <span class="bg-violet-100 text-violet-700 rounded-full px-1.5 py-1 text-xs font-bold"><?= (int)($tabCounts['adestrador']??0) ?></span>
     </a>
 </div>
 
@@ -131,25 +141,27 @@ $statusLabels = ['novo'=>'Novo','contatado'=>'Contatado','convertido'=>'Converti
 <div class="flex flex-wrap items-center gap-1.5 mb-2">
     <form method="GET" class="flex flex-wrap gap-1 flex-1 items-center">
         <input type="hidden" name="tab" value="<?= e($tabAtiva) ?>">
-        <input type="text" name="q" value="<?= e($q) ?>" placeholder="Buscar..." class="border border-gray-300 rounded px-2 py-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-500 w-32">
-        <select name="status" class="border border-gray-300 rounded px-1.5 py-1 text-[11px]">
+        <input type="text" name="q" value="<?= e($q) ?>" placeholder="Buscar..." class="border border-gray-300 rounded px-2 py-1 text-[13px] focus:outline-none focus:ring-1 focus:ring-blue-500 w-44">
+        <select name="status" class="border border-gray-300 rounded px-1.5 py-1 text-[13px]">
             <option value="">Status</option>
             <?php foreach ($statusLabels as $sv => $sl): ?><option value="<?= $sv ?>" <?= $fStatus===$sv?'selected':'' ?>><?= $sl ?></option><?php endforeach; ?>
         </select>
-        <select name="segmento" class="border border-gray-300 rounded px-1.5 py-1 text-[11px]">
+        <select name="segmento" class="border border-gray-300 rounded px-1.5 py-1 text-[13px]">
             <option value="">Segmento</option>
             <?php foreach ($segmentos as $seg): ?><option value="<?= e($seg) ?>" <?= $fSegmento===$seg?'selected':'' ?>><?= e($seg) ?></option><?php endforeach; ?>
         </select>
-        <select name="estado" class="border border-gray-300 rounded px-1.5 py-1 text-[11px]">
+        <select name="estado" class="border border-gray-300 rounded px-1.5 py-1 text-[13px]">
             <option value="">Estado</option>
             <?php foreach ($estados as $est): ?><option value="<?= e($est) ?>" <?= $fEstado===$est?'selected':'' ?>><?= e($est) ?></option><?php endforeach; ?>
         </select>
-        <button type="submit" class="bg-blue-600 text-white px-2.5 py-1 rounded text-[11px] hover:bg-blue-700">Filtrar</button>
-        <?php if ($q||$fStatus||$fSegmento||$fEstado): ?><a href="leads.php?tab=<?= e($tabAtiva) ?>" class="text-gray-400 hover:text-gray-600 text-[11px]">✕</a><?php endif; ?>
+        <input type="text" name="cidade" value="<?= e($fCidade) ?>" list="dl_cidades" placeholder="Cidade..." autocomplete="off" class="border border-gray-300 rounded px-1.5 py-1 text-[13px] w-40">
+        <datalist id="dl_cidades"><?php foreach ($cidades as $cid): ?><option value="<?= e($cid) ?>"><?php endforeach; ?></datalist>
+        <button type="submit" class="bg-blue-600 text-white px-2.5 py-1 rounded text-[13px] hover:bg-blue-700">Filtrar</button>
+        <?php if ($q||$fStatus||$fSegmento||$fEstado||$fCidade): ?><a href="leads.php?tab=<?= e($tabAtiva) ?>" class="text-gray-400 hover:text-gray-600 text-[13px]">✕</a><?php endif; ?>
     </form>
-    <div class="flex gap-1 text-[10px]">
+    <div class="flex gap-1 text-xs">
         <?php foreach (['novo'=>['🆕','blue'],'contatado'=>['📞','yellow'],'convertido'=>['✅','green'],'em_negociacao'=>['🤝','purple'],'descartado'=>['❌','gray']] as $sk=>[$se,$sc]): ?>
-        <a href="leads.php?tab=<?= e($tabAtiva) ?>&status=<?= $sk ?>" class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full font-semibold <?= $fStatus===$sk?"ring-1 ring-{$sc}-400":'' ?> bg-<?= $sc ?>-50 text-<?= $sc ?>-700" title="<?= $statusLabels[$sk] ?>">
+        <a href="leads.php?tab=<?= e($tabAtiva) ?>&status=<?= $sk ?>" class="inline-flex items-center gap-0.5 px-1.5 py-1 rounded-full font-semibold <?= $fStatus===$sk?"ring-1 ring-{$sc}-400":'' ?> bg-<?= $sc ?>-50 text-<?= $sc ?>-700" title="<?= $statusLabels[$sk] ?>">
             <?= $se ?><span class="font-bold"><?= $stats[$sk] ?></span>
         </a>
         <?php endforeach; ?>
@@ -157,22 +169,22 @@ $statusLabels = ['novo'=>'Novo','contatado'=>'Contatado','convertido'=>'Converti
 </div>
 
 <!-- Alertas -->
-<?php if (isset($_GET['deleted'])): ?><div class="bg-green-50 border border-green-200 text-green-700 rounded px-2 py-1 mb-1.5 text-[11px]">Lead excluído.</div><?php endif; ?>
-<?php if (isset($_GET['convertido'])): ?><div class="bg-green-50 border border-green-200 text-green-700 rounded px-2 py-1 mb-1.5 text-[11px] flex items-center gap-2">✅ Convertido! <a href="cliente_form.php?id=<?= (int)$_GET['convertido'] ?>" class="underline font-medium">Ver cliente →</a></div><?php endif; ?>
-<?php if (!empty($erroConversao)): ?><div class="bg-red-50 border border-red-200 text-red-700 rounded px-2 py-1 mb-1.5 text-[11px]"><?= e($erroConversao) ?></div><?php endif; ?>
+<?php if (isset($_GET['deleted'])): ?><div class="bg-green-50 border border-green-200 text-green-700 rounded px-2 py-1 mb-1.5 text-[13px]">Lead excluído.</div><?php endif; ?>
+<?php if (isset($_GET['convertido'])): ?><div class="bg-green-50 border border-green-200 text-green-700 rounded px-2 py-1 mb-1.5 text-[13px] flex items-center gap-2">✅ Convertido! <a href="cliente_form.php?id=<?= (int)$_GET['convertido'] ?>" class="underline font-medium">Ver cliente →</a></div><?php endif; ?>
+<?php if (!empty($erroConversao)): ?><div class="bg-red-50 border border-red-200 text-red-700 rounded px-2 py-1 mb-1.5 text-[13px]"><?= e($erroConversao) ?></div><?php endif; ?>
 
 <!-- Tabela -->
 <div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
-<table class="w-full" style="font-size:11px">
+<table class="w-full" style="font-size:13px">
 <thead>
-<tr class="bg-gray-50 border-b border-gray-200" style="line-height:1.2">
-    <th class="text-left px-2 py-1 font-semibold text-gray-500 uppercase" style="font-size:9px">Empresa</th>
-    <th class="text-left px-1.5 py-1 font-semibold text-gray-500 uppercase" style="font-size:9px">Segmento</th>
-    <th class="text-left px-1.5 py-1 font-semibold text-gray-500 uppercase" style="font-size:9px">Cidade</th>
-    <th class="text-left px-1.5 py-1 font-semibold text-gray-500 uppercase" style="font-size:9px">Telefone</th>
-    <th class="text-center px-1 py-1 font-semibold text-gray-500 uppercase" style="font-size:9px">Links</th>
-    <th class="text-center px-1.5 py-1 font-semibold text-gray-500 uppercase" style="font-size:9px">Status</th>
-    <th class="text-center px-1 py-1 font-semibold text-gray-500 uppercase" style="font-size:9px">Ações</th>
+<tr class="bg-gray-50 border-b border-gray-200" style="line-height:1.4">
+    <th class="text-left px-2 py-1 font-semibold text-gray-500 uppercase" style="font-size:11px">Empresa</th>
+    <th class="text-left px-1.5 py-1 font-semibold text-gray-500 uppercase" style="font-size:11px">Segmento</th>
+    <th class="text-left px-1.5 py-1 font-semibold text-gray-500 uppercase" style="font-size:11px">Cidade</th>
+    <th class="text-left px-1.5 py-1 font-semibold text-gray-500 uppercase" style="font-size:11px">Telefone</th>
+    <th class="text-center px-1 py-1 font-semibold text-gray-500 uppercase" style="font-size:11px">Links</th>
+    <th class="text-center px-1.5 py-1 font-semibold text-gray-500 uppercase" style="font-size:11px">Status</th>
+    <th class="text-center px-1 py-1 font-semibold text-gray-500 uppercase" style="font-size:11px">Ações</th>
 </tr>
 </thead>
 <tbody class="divide-y divide-gray-50">
@@ -184,32 +196,32 @@ $statusLabels = ['novo'=>'Novo','contatado'=>'Contatado','convertido'=>'Converti
     $redes = json_decode($l['redes_sociais']??'{}',true)?:[];
     $hasLinks = $email || $l['website'] || $redes;
 ?>
-<tr class="hover:bg-gray-50 <?= $isNeg?'bg-purple-50/30':($isCon?'bg-green-50/30':'') ?>" style="line-height:1.3">
+<tr class="hover:bg-gray-50 <?= $isNeg?'bg-purple-50/30':($isCon?'bg-green-50/30':'') ?>" style="line-height:1.5">
     <!-- Empresa -->
-    <td class="px-2 py-0.5">
+    <td class="px-2 py-1">
         <span class="font-medium text-gray-800" title="<?= e($l['observacoes']??'') ?>"><?= e($l['empresa']) ?></span>
     </td>
     <!-- Segmento -->
-    <td class="px-1.5 py-0.5"><span class="px-1 py-px rounded-full font-medium bg-indigo-50 text-indigo-700" style="font-size:10px"><?= e($l['segmento']??'-') ?></span></td>
+    <td class="px-1.5 py-1"><span class="px-1 py-px rounded-full font-medium bg-indigo-50 text-indigo-700" style="font-size:12px"><?= e($l['segmento']??'-') ?></span></td>
     <!-- Cidade -->
-    <td class="px-1.5 py-0.5 text-gray-600"><?= e($l['cidade']??'-') ?><?php if(!empty($l['estado'])): ?> <span class="text-gray-400 font-bold"><?= e($l['estado']) ?></span><?php endif; ?></td>
+    <td class="px-1.5 py-1 text-gray-600"><?= e($l['cidade']??'-') ?><?php if(!empty($l['estado'])): ?> <span class="text-gray-400 font-bold"><?= e($l['estado']) ?></span><?php endif; ?></td>
     <!-- Telefone -->
-    <td class="px-1.5 py-0.5">
+    <td class="px-1.5 py-1">
         <?php if ($tel): ?>
         <div class="flex items-center gap-1">
-            <span class="text-gray-700" style="font-size:10px"><?= e($tel) ?></span>
+            <span class="text-gray-700" style="font-size:12px"><?= e($tel) ?></span>
             <a href="https://wa.me/<?= e($telC) ?>" target="_blank" title="WhatsApp" class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-green-500 hover:bg-green-600 text-white"><svg class="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg></a>
         </div>
         <?php else: ?>
         <form method="POST" class="flex items-center gap-0.5">
-            <input type="hidden" name="_action" value="salvar_telefone"><input type="hidden" name="id" value="<?= $l['id'] ?>"><input type="hidden" name="_tab" value="<?= e($tabAtiva) ?>"><input type="hidden" name="_q" value="<?= e($q) ?>"><input type="hidden" name="_fs" value="<?= e($fStatus) ?>"><input type="hidden" name="_fg" value="<?= e($fSegmento) ?>"><input type="hidden" name="_p" value="<?= $curPage ?>">
-            <input type="text" name="telefone" placeholder="(11) 9..." class="border border-gray-200 rounded px-1 py-px w-20 focus:ring-1 focus:ring-blue-400 focus:outline-none" style="font-size:10px">
-            <button type="submit" class="text-blue-600 font-bold" style="font-size:10px">✓</button>
+            <input type="hidden" name="_action" value="salvar_telefone"><input type="hidden" name="id" value="<?= $l['id'] ?>"><input type="hidden" name="_tab" value="<?= e($tabAtiva) ?>"><input type="hidden" name="_q" value="<?= e($q) ?>"><input type="hidden" name="_fs" value="<?= e($fStatus) ?>"><input type="hidden" name="_fg" value="<?= e($fSegmento) ?>"><input type="hidden" name="_fe" value="<?= e($fEstado) ?>"><input type="hidden" name="_fci" value="<?= e($fCidade) ?>"><input type="hidden" name="_p" value="<?= $curPage ?>">
+            <input type="text" name="telefone" placeholder="(11) 9..." class="border border-gray-200 rounded px-1 py-px w-20 focus:ring-1 focus:ring-blue-400 focus:outline-none" style="font-size:12px">
+            <button type="submit" class="text-blue-600 font-bold" style="font-size:12px">✓</button>
         </form>
         <?php endif; ?>
     </td>
     <!-- Links (icons only: email + site + redes) -->
-    <td class="px-1 py-0.5">
+    <td class="px-1 py-1">
         <div class="flex items-center justify-center gap-1 flex-wrap">
             <?php if ($email): ?>
             <a href="mailto:<?= e($email) ?>" title="<?= e($email) ?>" class="text-gray-400 hover:text-blue-600"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75"/></svg></a>
@@ -232,68 +244,68 @@ $statusLabels = ['novo'=>'Novo','contatado'=>'Contatado','convertido'=>'Converti
             <?php if (!empty($redes['linkedin'])): ?>
             <a href="<?= e($redes['linkedin']) ?>" target="_blank" title="LinkedIn" class="text-blue-700 hover:text-blue-900"><svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667h-3.554v-11.452h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zm-15.11-13.019c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019h-3.564v-11.452h3.564v11.452zm15.106-20.452h-20.454c-.979 0-1.771.774-1.771 1.729v20.542c0 .956.792 1.729 1.771 1.729h20.451c.978 0 1.778-.773 1.778-1.729v-20.542c0-.955-.8-1.729-1.778-1.729z"/></svg></a>
             <?php endif; ?>
-            <?php if (!$hasLinks): ?><span class="text-gray-300 text-[10px]">—</span><?php endif; ?>
+            <?php if (!$hasLinks): ?><span class="text-gray-300 text-xs">—</span><?php endif; ?>
         </div>
     </td>
     <!-- Status -->
-    <td class="px-1.5 py-0.5 text-center">
+    <td class="px-1.5 py-1 text-center">
         <?php if ($isNeg): ?>
         <div class="inline-flex flex-col items-center">
             <div class="inline-flex items-center gap-0.5">
-                <span class="px-1.5 py-px rounded-full font-semibold bg-purple-100 text-purple-700" style="font-size:10px">🤝 Neg.</span>
+                <span class="px-1.5 py-px rounded-full font-semibold bg-purple-100 text-purple-700" style="font-size:12px">🤝 Neg.</span>
                 <?php if (isMaster()): ?>
-                <form method="POST" class="inline" onsubmit="return confirm('Reverter para Novo?')"><input type="hidden" name="_action" value="reverter_status"><input type="hidden" name="id" value="<?= $l['id'] ?>"><input type="hidden" name="_tab" value="<?= e($tabAtiva) ?>"><input type="hidden" name="_q" value="<?= e($q) ?>"><input type="hidden" name="_fs" value="<?= e($fStatus) ?>"><input type="hidden" name="_fg" value="<?= e($fSegmento) ?>"><input type="hidden" name="_p" value="<?= $curPage ?>"><button type="submit" title="Reverter para Novo" class="text-gray-300 hover:text-red-500 transition" style="font-size:10px">↩</button></form>
+                <form method="POST" class="inline" onsubmit="return confirm('Reverter para Novo?')"><input type="hidden" name="_action" value="reverter_status"><input type="hidden" name="id" value="<?= $l['id'] ?>"><input type="hidden" name="_tab" value="<?= e($tabAtiva) ?>"><input type="hidden" name="_q" value="<?= e($q) ?>"><input type="hidden" name="_fs" value="<?= e($fStatus) ?>"><input type="hidden" name="_fg" value="<?= e($fSegmento) ?>"><input type="hidden" name="_fe" value="<?= e($fEstado) ?>"><input type="hidden" name="_fci" value="<?= e($fCidade) ?>"><input type="hidden" name="_p" value="<?= $curPage ?>"><button type="submit" title="Reverter para Novo" class="text-gray-300 hover:text-red-500 transition" style="font-size:12px">↩</button></form>
                 <?php endif; ?>
             </div>
-            <?php if(!empty($l['convertido_por'])): ?><span class="text-gray-400" style="font-size:8px">por <?= e($l['convertido_por']) ?></span><?php endif; ?>
+            <?php if(!empty($l['convertido_por'])): ?><span class="text-gray-400" style="font-size:10px">por <?= e($l['convertido_por']) ?></span><?php endif; ?>
         </div>
         <?php elseif ($isCon): ?>
         <div class="inline-flex flex-col items-center">
             <div class="inline-flex items-center gap-0.5">
-                <span class="px-1.5 py-px rounded-full font-semibold bg-green-100 text-green-700" style="font-size:10px">✅ Conv.</span>
+                <span class="px-1.5 py-px rounded-full font-semibold bg-green-100 text-green-700" style="font-size:12px">✅ Conv.</span>
                 <?php if (isMaster()): ?>
-                <form method="POST" class="inline" onsubmit="return confirm('Reverter para Novo?\nO cliente criado NÃO será excluído.')"><input type="hidden" name="_action" value="reverter_status"><input type="hidden" name="id" value="<?= $l['id'] ?>"><input type="hidden" name="_tab" value="<?= e($tabAtiva) ?>"><input type="hidden" name="_q" value="<?= e($q) ?>"><input type="hidden" name="_fs" value="<?= e($fStatus) ?>"><input type="hidden" name="_fg" value="<?= e($fSegmento) ?>"><input type="hidden" name="_p" value="<?= $curPage ?>"><button type="submit" title="Reverter para Novo" class="text-gray-300 hover:text-red-500 transition" style="font-size:10px">↩</button></form>
+                <form method="POST" class="inline" onsubmit="return confirm('Reverter para Novo?\nO cliente criado NÃO será excluído.')"><input type="hidden" name="_action" value="reverter_status"><input type="hidden" name="id" value="<?= $l['id'] ?>"><input type="hidden" name="_tab" value="<?= e($tabAtiva) ?>"><input type="hidden" name="_q" value="<?= e($q) ?>"><input type="hidden" name="_fs" value="<?= e($fStatus) ?>"><input type="hidden" name="_fg" value="<?= e($fSegmento) ?>"><input type="hidden" name="_fe" value="<?= e($fEstado) ?>"><input type="hidden" name="_fci" value="<?= e($fCidade) ?>"><input type="hidden" name="_p" value="<?= $curPage ?>"><button type="submit" title="Reverter para Novo" class="text-gray-300 hover:text-red-500 transition" style="font-size:12px">↩</button></form>
                 <?php endif; ?>
             </div>
-            <?php if(!empty($l['convertido_por'])): ?><span class="text-gray-400" style="font-size:8px">por <?= e($l['convertido_por']) ?></span><?php endif; ?>
+            <?php if(!empty($l['convertido_por'])): ?><span class="text-gray-400" style="font-size:10px">por <?= e($l['convertido_por']) ?></span><?php endif; ?>
         </div>
         <?php elseif ($isCtd): ?>
         <div class="inline-flex flex-col items-center">
             <div class="inline-flex items-center gap-0.5">
-                <span class="px-1.5 py-px rounded-full font-semibold bg-yellow-100 text-yellow-700" style="font-size:10px">📞 Contatado</span>
+                <span class="px-1.5 py-px rounded-full font-semibold bg-yellow-100 text-yellow-700" style="font-size:12px">📞 Contatado</span>
                 <?php if (isMaster()): ?>
-                <form method="POST" class="inline" onsubmit="return confirm('Reverter para Novo?')"><input type="hidden" name="_action" value="reverter_status"><input type="hidden" name="id" value="<?= $l['id'] ?>"><input type="hidden" name="_tab" value="<?= e($tabAtiva) ?>"><input type="hidden" name="_q" value="<?= e($q) ?>"><input type="hidden" name="_fs" value="<?= e($fStatus) ?>"><input type="hidden" name="_fg" value="<?= e($fSegmento) ?>"><input type="hidden" name="_p" value="<?= $curPage ?>"><button type="submit" title="Reverter para Novo" class="text-gray-300 hover:text-red-500 transition" style="font-size:10px">↩</button></form>
+                <form method="POST" class="inline" onsubmit="return confirm('Reverter para Novo?')"><input type="hidden" name="_action" value="reverter_status"><input type="hidden" name="id" value="<?= $l['id'] ?>"><input type="hidden" name="_tab" value="<?= e($tabAtiva) ?>"><input type="hidden" name="_q" value="<?= e($q) ?>"><input type="hidden" name="_fs" value="<?= e($fStatus) ?>"><input type="hidden" name="_fg" value="<?= e($fSegmento) ?>"><input type="hidden" name="_fe" value="<?= e($fEstado) ?>"><input type="hidden" name="_fci" value="<?= e($fCidade) ?>"><input type="hidden" name="_p" value="<?= $curPage ?>"><button type="submit" title="Reverter para Novo" class="text-gray-300 hover:text-red-500 transition" style="font-size:12px">↩</button></form>
                 <?php endif; ?>
             </div>
-            <?php if(!empty($l['contatado_por'])): ?><span class="text-gray-400" style="font-size:8px">por <?= e($l['contatado_por']) ?></span><?php endif; ?>
+            <?php if(!empty($l['contatado_por'])): ?><span class="text-gray-400" style="font-size:10px">por <?= e($l['contatado_por']) ?></span><?php endif; ?>
         </div>
         <?php else: ?>
         <form method="POST" class="inline-flex">
-            <input type="hidden" name="_action" value="status"><input type="hidden" name="id" value="<?= $l['id'] ?>"><input type="hidden" name="_tab" value="<?= e($tabAtiva) ?>"><input type="hidden" name="_q" value="<?= e($q) ?>"><input type="hidden" name="_fs" value="<?= e($fStatus) ?>"><input type="hidden" name="_fg" value="<?= e($fSegmento) ?>"><input type="hidden" name="_p" value="<?= $curPage ?>">
-            <select name="novo_status" onchange="this.form.submit()" class="border border-gray-200 rounded-full px-1.5 py-px font-semibold cursor-pointer focus:outline-none <?= $statusBadges[$l['status']]??'' ?>" style="font-size:10px">
+            <input type="hidden" name="_action" value="status"><input type="hidden" name="id" value="<?= $l['id'] ?>"><input type="hidden" name="_tab" value="<?= e($tabAtiva) ?>"><input type="hidden" name="_q" value="<?= e($q) ?>"><input type="hidden" name="_fs" value="<?= e($fStatus) ?>"><input type="hidden" name="_fg" value="<?= e($fSegmento) ?>"><input type="hidden" name="_fe" value="<?= e($fEstado) ?>"><input type="hidden" name="_fci" value="<?= e($fCidade) ?>"><input type="hidden" name="_p" value="<?= $curPage ?>">
+            <select name="novo_status" onchange="this.form.submit()" class="border border-gray-200 rounded-full px-1.5 py-px font-semibold cursor-pointer focus:outline-none <?= $statusBadges[$l['status']]??'' ?>" style="font-size:12px">
                 <?php foreach (['novo','contatado','descartado'] as $s): ?><option value="<?= $s ?>" <?= $l['status']===$s?'selected':'' ?>><?= ucfirst($s) ?></option><?php endforeach; ?>
             </select>
         </form>
         <?php endif; ?>
     </td>
     <!-- Ações -->
-    <td class="px-1 py-0.5 text-center">
+    <td class="px-1 py-1 text-center">
         <div class="flex items-center gap-0.5 justify-center">
             <?php if ($isAdv): ?>
                 <?php if ($l['cliente_id']): ?>
-                <a href="cliente_form.php?id=<?= $l['cliente_id'] ?>" class="text-blue-600 hover:text-blue-800 font-medium" style="font-size:10px">Cli</a>
+                <a href="cliente_form.php?id=<?= $l['cliente_id'] ?>" class="text-blue-600 hover:text-blue-800 font-medium" style="font-size:12px">Cli</a>
                 <?php if ($isNeg): $stN=$pdo->prepare('SELECT id FROM negociacoes WHERE cliente_id=? ORDER BY id DESC LIMIT 1');$stN->execute([$l['cliente_id']]);$nid=$stN->fetchColumn(); if($nid): ?>
-                <a href="negociacao_detalhe.php?id=<?= $nid ?>" class="text-purple-600 hover:text-purple-800 font-medium" style="font-size:10px">Neg</a>
+                <a href="negociacao_detalhe.php?id=<?= $nid ?>" class="text-purple-600 hover:text-purple-800 font-medium" style="font-size:12px">Neg</a>
                 <?php endif; endif; ?>
                 <?php endif; ?>
             <?php else: ?>
                 <form method="POST" onsubmit="return confirm('Converter em cliente?\n\n<?= e(addslashes($l['empresa'])) ?>')">
                     <input type="hidden" name="_action" value="converter"><input type="hidden" name="id" value="<?= $l['id'] ?>"><input type="hidden" name="_tab" value="<?= e($tabAtiva) ?>">
-                    <button class="bg-green-600 hover:bg-green-700 text-white font-medium px-1.5 py-px rounded" style="font-size:10px">Conv.</button>
+                    <button class="bg-green-600 hover:bg-green-700 text-white font-medium px-1.5 py-px rounded" style="font-size:12px">Conv.</button>
                 </form>
                 <form method="POST" onsubmit="return confirm('Excluir?')">
                     <input type="hidden" name="_action" value="delete"><input type="hidden" name="id" value="<?= $l['id'] ?>"><input type="hidden" name="_tab" value="<?= e($tabAtiva) ?>">
-                    <button class="text-red-400 hover:text-red-600" style="font-size:10px">✕</button>
+                    <button class="text-red-400 hover:text-red-600" style="font-size:12px">✕</button>
                 </form>
             <?php endif; ?>
         </div>
@@ -304,10 +316,10 @@ $statusLabels = ['novo'=>'Novo','contatado'=>'Contatado','convertido'=>'Converti
 </tbody>
 </table>
 <?php if ($pages > 1): ?>
-<div class="px-3 py-1.5 border-t border-gray-100 flex items-center justify-between text-gray-500" style="font-size:11px">
+<div class="px-3 py-1.5 border-t border-gray-100 flex items-center justify-between text-gray-500" style="font-size:13px">
     <span>Pág. <?= $curPage ?>/<?= $pages ?> (<?= $total ?>)</span>
     <div class="flex gap-0.5"><?php for ($i=1;$i<=$pages;$i++): ?>
-        <a href="?tab=<?= urlencode($tabAtiva) ?>&p=<?= $i ?>&q=<?= urlencode($q) ?>&status=<?= urlencode($fStatus) ?>&segmento=<?= urlencode($fSegmento) ?>" class="px-1.5 py-px rounded <?= $i===$curPage?'bg-blue-600 text-white':'hover:bg-gray-100' ?>"><?= $i ?></a>
+        <a href="?tab=<?= urlencode($tabAtiva) ?>&p=<?= $i ?>&q=<?= urlencode($q) ?>&status=<?= urlencode($fStatus) ?>&segmento=<?= urlencode($fSegmento) ?>&estado=<?= urlencode($fEstado) ?>&cidade=<?= urlencode($fCidade) ?>" class="px-1.5 py-px rounded <?= $i===$curPage?'bg-blue-600 text-white':'hover:bg-gray-100' ?>"><?= $i ?></a>
     <?php endfor; ?></div>
 </div>
 <?php endif; ?>

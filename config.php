@@ -100,3 +100,60 @@ define('WA_TEMPLATE_LANG', 'pt_BR');
 define('GOOGLE_CLIENT_ID',     'SEU_CLIENT_ID_AQUI');
 define('GOOGLE_CLIENT_SECRET', 'SEU_CLIENT_SECRET_AQUI');
 define('GOOGLE_REDIRECT_URI',  'http://localhost/crm/google_callback.php');
+
+// ─── Meta / Instagram Integration ────────────────────────────────────────────
+// Configurações persistidas na tabela configuracoes_meta (gerenciadas via instagram_config.php)
+function getMetaConfig(string $key, string $default = ''): string {
+    global $pdo;
+    try {
+        $stmt = $pdo->prepare('SELECT valor FROM configuracoes_meta WHERE chave = ?');
+        $stmt->execute([$key]);
+        $val = $stmt->fetchColumn();
+        return $val !== false && $val !== '' ? $val : $default;
+    } catch (PDOException $e) {
+        return $default;
+    }
+}
+
+function setMetaConfig(string $key, string $value): void {
+    global $pdo;
+    $pdo->prepare(
+        'INSERT INTO configuracoes_meta (chave, valor) VALUES (?, ?)
+         ON DUPLICATE KEY UPDATE valor = VALUES(valor)'
+    )->execute([$key, $value]);
+}
+
+// ─── Notificações ────────────────────────────────────────────────────────────
+function criarNotificacao(string $tipo, string $titulo, ?string $mensagem = null, ?string $link = null, ?int $refId = null, ?int $usuarioId = null): void {
+    global $pdo;
+    try {
+        $pdo->prepare(
+            'INSERT INTO notificacoes (tipo, titulo, mensagem, link, ref_id, usuario_id)
+             VALUES (?, ?, ?, ?, ?, ?)'
+        )->execute([$tipo, $titulo, $mensagem, $link, $refId, $usuarioId]);
+    } catch (PDOException $e) {
+        // Falha silenciosa
+    }
+}
+
+function contarNotificacoesNaoLidas(?int $usuarioId = null): int {
+    global $pdo;
+    try {
+        $stmt = $pdo->prepare(
+            'SELECT COUNT(*) FROM notificacoes WHERE lida = 0 AND (usuario_id IS NULL OR usuario_id = ?)'
+        );
+        $stmt->execute([$usuarioId]);
+        return (int)$stmt->fetchColumn();
+    } catch (PDOException $e) {
+        return 0;
+    }
+}
+
+function tempoRelativo(string $data): string {
+    $diff = time() - strtotime($data);
+    if ($diff < 60)   return 'agora';
+    if ($diff < 3600) return floor($diff / 60) . ' min';
+    if ($diff < 86400) return floor($diff / 3600) . 'h';
+    if ($diff < 604800) return floor($diff / 86400) . 'd';
+    return date('d/m', strtotime($data));
+}

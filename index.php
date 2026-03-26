@@ -43,6 +43,22 @@ $chartCores  = array_map(fn($c) => match($c['cor']) {
     default    => '#9ca3af'
 }, $funilMap);
 
+// ── Leads Instagram recentes ──────────────────────────────────────────────────
+try {
+    $igLeadsRecentes = $pdo->query("
+        SELECT id, fonte, nome, email, telefone, ig_username, ad_name, mensagem, status, criado_em
+        FROM instagram_leads
+        ORDER BY criado_em DESC
+        LIMIT 5
+    ")->fetchAll();
+    $igHoje    = (int)$pdo->query("SELECT COUNT(*) FROM instagram_leads WHERE DATE(criado_em) = CURDATE()")->fetchColumn();
+    $igSemana  = (int)$pdo->query("SELECT COUNT(*) FROM instagram_leads WHERE criado_em >= DATE_SUB(NOW(), INTERVAL 7 DAY)")->fetchColumn();
+    $igTotal   = (int)$pdo->query("SELECT COUNT(*) FROM instagram_leads")->fetchColumn();
+} catch (PDOException $e) {
+    $igLeadsRecentes = [];
+    $igHoje = $igSemana = $igTotal = 0;
+}
+
 // ── Tarefas próximas (7 dias) ─────────────────────────────────────────────────
 $prox = $pdo->query("
     SELECT t.assunto, t.tipo, t.quando, c.nome AS cliente
@@ -136,6 +152,82 @@ foreach ($cards as $c): [$bg,$ic,$txt] = $colorMap[$c['color']]; ?>
         <canvas id="chartValor" height="200"></canvas>
     </div>
 </div>
+
+<!-- Leads Instagram -->
+<?php if ($igTotal > 0 || !empty(getMetaConfig('meta_page_token'))): ?>
+<div class="bg-white rounded-xl border border-purple-200 p-5 mb-6">
+    <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-lg flex items-center justify-center" style="background:linear-gradient(135deg,#833ab4,#fd1d1d,#fcb045)">
+                <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/>
+                </svg>
+            </div>
+            <div>
+                <h2 class="text-sm font-bold text-gray-800">Leads Instagram</h2>
+                <p class="text-xs text-gray-400">Hoje: <?= $igHoje ?> | Semana: <?= $igSemana ?> | Total: <?= $igTotal ?></p>
+            </div>
+        </div>
+        <a href="instagram_leads.php" class="text-xs text-purple-600 hover:underline font-medium">Ver todos &rarr;</a>
+    </div>
+    <?php if (empty($igLeadsRecentes)): ?>
+        <p class="text-sm text-gray-400 text-center py-4">Nenhum lead do Instagram ainda. Configure a integração em <a href="instagram_config.php" class="text-purple-600 hover:underline">Configurações</a>.</p>
+    <?php else: ?>
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="text-xs font-semibold text-gray-500 uppercase tracking-wide border-b">
+                    <th class="pb-2 text-left">Nome</th>
+                    <th class="pb-2 text-left">Fonte</th>
+                    <th class="pb-2 text-left hidden sm:table-cell">Contato</th>
+                    <th class="pb-2 text-left hidden md:table-cell">Campanha</th>
+                    <th class="pb-2 text-left">Status</th>
+                    <th class="pb-2 text-right">Quando</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-50">
+            <?php foreach ($igLeadsRecentes as $ig):
+                $statusBadge = match($ig['status']) {
+                    'novo'       => 'bg-blue-100 text-blue-700',
+                    'contatado'  => 'bg-yellow-100 text-yellow-700',
+                    'convertido' => 'bg-green-100 text-green-700',
+                    'descartado' => 'bg-gray-100 text-gray-500',
+                    default      => 'bg-gray-100 text-gray-500',
+                };
+            ?>
+            <tr class="hover:bg-purple-50 transition-colors">
+                <td class="py-2.5 pr-3">
+                    <a href="instagram_leads.php?id=<?= $ig['id'] ?>" class="font-medium text-gray-800 hover:text-purple-700">
+                        <?= e($ig['nome'] ?? $ig['ig_username'] ?? 'Desconhecido') ?>
+                    </a>
+                </td>
+                <td class="py-2.5 pr-3">
+                    <?php if ($ig['fonte'] === 'lead_ad'): ?>
+                        <span class="inline-flex items-center gap-1 text-xs text-orange-600"><svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M3 3a1 1 0 000 2v8a2 2 0 002 2h2.586l-1.293 1.293a1 1 0 101.414 1.414L10 15.414l2.293 2.293a1 1 0 001.414-1.414L12.414 15H15a2 2 0 002-2V5a1 1 0 100-2H3z"/></svg> Lead Ad</span>
+                    <?php else: ?>
+                        <span class="inline-flex items-center gap-1 text-xs text-pink-600"><svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clip-rule="evenodd"/></svg> Direct</span>
+                    <?php endif; ?>
+                </td>
+                <td class="py-2.5 pr-3 text-gray-500 hidden sm:table-cell text-xs">
+                    <?= e($ig['telefone'] ?? $ig['email'] ?? '-') ?>
+                </td>
+                <td class="py-2.5 pr-3 text-gray-500 hidden md:table-cell text-xs truncate max-w-[150px]">
+                    <?= e($ig['ad_name'] ?? ($ig['mensagem'] ? mb_substr($ig['mensagem'], 0, 40) . '...' : '-')) ?>
+                </td>
+                <td class="py-2.5 pr-3">
+                    <span class="badge text-xs <?= $statusBadge ?>"><?= e($ig['status']) ?></span>
+                </td>
+                <td class="py-2.5 text-right text-xs text-gray-400">
+                    <?= tempoRelativo($ig['criado_em']) ?>
+                </td>
+            </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+    <?php endif; ?>
+</div>
+<?php endif; ?>
 
 <!-- Últimas negociações + próximas tarefas -->
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
